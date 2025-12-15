@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Geometry Dash Clone</title>
+
+<style>
+  body {
+    margin: 0;
+    background: #111;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+
+  canvas {
+    background: #1e1e1e;
+    border: 3px solid #00ffff;
+    touch-action: manipulation;
+  }
+</style>
+</head>
+
+<body>
+
+<canvas id="game" width="600" height="200"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+/* ================= PLAYER IMAGE ================= */
+const playerImg = new Image();
+playerImg.src = "player.png"; // optional custom cube
+
+/* ================= PLAYER ================= */
+let player = {
+  x: 80,
+  y: 130,
+  size: 30,
+  velocity: 0,
+  gravity: 0.6,
+  jump: -10,
+  grounded: false,
+  rotation: 0
+};
+
+/* ================= GAME ================= */
+let groundY = 160;
+let speed = 4;
+let obstacles = [];
+let frame = 0;
+let gameOver = false;
+let score = 0;
+
+/* ================= HIGHSCORE ================= */
+let highScore = Number(localStorage.getItem("gdHighScore")) || 0;
+
+/* ================= INPUT ================= */
+canvas.addEventListener("mousedown", jump);
+canvas.addEventListener("touchstart", jump);
+document.addEventListener("keydown", e => {
+  if (e.code === "Space") jump();
+});
+
+function jump(e) {
+  if (e) e.preventDefault();
+
+  if (player.grounded && !gameOver) {
+    player.velocity = player.jump;
+    player.grounded = false;
+  }
+
+  if (gameOver) resetGame();
+}
+
+/* ================= RESET ================= */
+function resetGame() {
+  obstacles = [];
+  frame = 0;
+  score = 0;
+  speed = 4;
+  gameOver = false;
+  player.y = 130;
+  player.velocity = 0;
+  player.rotation = 0;
+}
+
+/* ================= OBSTACLES ================= */
+function addObstacle() {
+  obstacles.push({
+    x: canvas.width,
+    width: 30,
+    height: 30
+  });
+}
+
+/* ================= GAME LOOP ================= */
+function update() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!gameOver) {
+    /* SCORE BASED ON DISTANCE */
+    score += speed;
+
+    /* INCREASE DIFFICULTY SLOWLY */
+    if (frame % 600 === 0) speed += 0.3;
+
+    /* PLAYER PHYSICS */
+    player.velocity += player.gravity;
+    player.y += player.velocity;
+
+    /* ROTATION ONLY IN AIR */
+    if (!player.grounded) {
+      player.rotation += 0.15;
+    }
+
+    /* GROUND COLLISION */
+    if (player.y + player.size >= groundY) {
+      player.y = groundY - player.size;
+      player.velocity = 0;
+      player.grounded = true;
+
+      /* SNAP TO 90 DEGREE */
+      player.rotation =
+        Math.round(player.rotation / (Math.PI / 2)) * (Math.PI / 2);
+    }
+
+    /* SPAWN SPIKES */
+    if (frame % 120 === 0) addObstacle();
+
+    /* MOVE + COLLISION */
+    obstacles.forEach(o => {
+      o.x -= speed;
+
+      /* FAIR HITBOX */
+      let padding = 6;
+
+      if (
+        player.x + padding < o.x + o.width &&
+        player.x + player.size - padding > o.x &&
+        player.y + player.size > groundY - o.height
+      ) {
+        gameOver = true;
+
+        if (score > highScore) {
+          highScore = score;
+          localStorage.setItem("gdHighScore", highScore);
+        }
+      }
+    });
+  }
+
+  /* DRAW GROUND */
+  ctx.fillStyle = "#00ffff";
+  ctx.fillRect(0, groundY, canvas.width, 5);
+
+  /* DRAW PLAYER WITH ROTATION */
+  ctx.save();
+  ctx.translate(player.x + player.size / 2, player.y + player.size / 2);
+  ctx.rotate(player.rotation);
+
+  if (playerImg.complete && playerImg.naturalWidth > 0) {
+    ctx.drawImage(
+      playerImg,
+      -player.size / 2,
+      -player.size / 2,
+      player.size,
+      player.size
+    );
+  } else {
+    ctx.fillStyle = "#ffcc00";
+    ctx.fillRect(
+      -player.size / 2,
+      -player.size / 2,
+      player.size,
+      player.size
+    );
+  }
+
+  ctx.restore();
+
+  /* DRAW SPIKES */
+  ctx.fillStyle = "#ff0055";
+  obstacles.forEach(o => {
+    ctx.beginPath();
+    ctx.moveTo(o.x, groundY);
+    ctx.lineTo(o.x + o.width / 2, groundY - o.height);
+    ctx.lineTo(o.x + o.width, groundY);
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  /* UI */
+  ctx.fillStyle = "white";
+  ctx.font = "16px Arial";
+  ctx.fillText("Score: " + Math.floor(score), 10, 20);
+  ctx.fillText("High: " + Math.floor(highScore), 10, 40);
+
+  if (gameOver) {
+    ctx.font = "20px Arial";
+    ctx.fillText("GAME OVER", 240, 90);
+    ctx.fillText("Tap / Space to Restart", 185, 120);
+  }
+
+  frame++;
+  requestAnimationFrame(update);
+}
+
+update();
+</script>
+
+</body>
+</html>
