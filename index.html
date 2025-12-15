@@ -1,22 +1,48 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Geometry Dash Clone</title>
+<title>NK Dash</title>
 
 <style>
   body {
     margin: 0;
     background: #111;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+  }
+
+  h1 { margin-top: 20px; }
+
+  #menu {
+    margin-top: 40px;
+  }
+
+  .char {
+    width: 60px;
+    height: 60px;
+    margin: 10px;
+    border: 3px solid #444;
+    cursor: pointer;
+  }
+
+  .char.selected {
+    border-color: #00ffff;
+  }
+
+  #startBtn {
+    margin-top: 20px;
+    padding: 12px 30px;
+    font-size: 18px;
+    cursor: pointer;
   }
 
   canvas {
     background: #1e1e1e;
     border: 3px solid #00ffff;
+    display: none;
+    margin: 20px auto;
     touch-action: manipulation;
   }
 </style>
@@ -24,15 +50,50 @@
 
 <body>
 
+<h1>NK DASH</h1>
+
+<!-- CHARACTER MENU -->
+<div id="menu">
+  <h2>Select Your Character</h2>
+
+  <div>
+    <img class="char" src="chars/char1.png" onclick="selectChar(0)">
+    <img class="char" src="chars/char2.png" onclick="selectChar(1)">
+    <img class="char" src="chars/char3.png" onclick="selectChar(2)">
+    <img class="char" src="chars/char4.png" onclick="selectChar(3)">
+    <img class="char" src="chars/char5.png" onclick="selectChar(4)">
+    <img class="char" src="chars/char6.png" onclick="selectChar(5)">
+  </div>
+
+  <button id="startBtn" onclick="startGame()">START</button>
+</div>
+
+<!-- GAME CANVAS -->
 <canvas id="game" width="600" height="200"></canvas>
 
 <script>
+/* ================= SETUP ================= */
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const menu = document.getElementById("menu");
 
-/* ================= PLAYER IMAGE ================= */
-const playerImg = new Image();
-playerImg.src = "player.png"; // optional custom cube
+/* ================= CHARACTERS ================= */
+const characters = [
+  "chars/char1.png",
+  "chars/char2.png",
+  "chars/char3.png",
+  "chars/char4.png",
+  "chars/char5.png",
+  "chars/char6.png"
+];
+
+let selectedChar = Number(localStorage.getItem("nkChar")) || 0;
+let playerImg = new Image();
+playerImg.src = characters[selectedChar];
+
+/* ================= GAME STATE ================= */
+let started = false;
+let gameOver = false;
 
 /* ================= PLAYER ================= */
 let player = {
@@ -46,33 +107,52 @@ let player = {
   rotation: 0
 };
 
-/* ================= GAME ================= */
+/* ================= GAME VARS ================= */
 let groundY = 160;
 let speed = 4;
 let obstacles = [];
 let frame = 0;
-let gameOver = false;
 let score = 0;
 
-/* ================= HIGHSCORE ================= */
-let highScore = Number(localStorage.getItem("gdHighScore")) || 0;
+/* ================= CHARACTER SELECT ================= */
+function selectChar(i) {
+  selectedChar = i;
+  localStorage.setItem("nkChar", i);
+  playerImg.src = characters[i];
+
+  document.querySelectorAll(".char").forEach((el, idx) => {
+    el.classList.toggle("selected", idx === i);
+  });
+}
+
+/* ================= START GAME ================= */
+function startGame() {
+  menu.style.display = "none";
+  canvas.style.display = "block";
+  started = true;
+  resetGame();
+  update();
+}
 
 /* ================= INPUT ================= */
-canvas.addEventListener("mousedown", jump);
-canvas.addEventListener("touchstart", jump);
+canvas.addEventListener("mousedown", handleInput);
+canvas.addEventListener("touchstart", handleInput);
 document.addEventListener("keydown", e => {
-  if (e.code === "Space") jump();
+  if (e.code === "Space") handleInput();
 });
 
-function jump(e) {
+function handleInput(e) {
   if (e) e.preventDefault();
 
-  if (player.grounded && !gameOver) {
+  if (gameOver) {
+    resetGame();
+    return;
+  }
+
+  if (player.grounded) {
     player.velocity = player.jump;
     player.grounded = false;
   }
-
-  if (gameOver) resetGame();
 }
 
 /* ================= RESET ================= */
@@ -89,65 +169,45 @@ function resetGame() {
 
 /* ================= OBSTACLES ================= */
 function addObstacle() {
-  obstacles.push({
-    x: canvas.width,
-    width: 30,
-    height: 30
-  });
+  obstacles.push({ x: canvas.width, width: 30, height: 30 });
 }
 
 /* ================= GAME LOOP ================= */
 function update() {
+  if (!started) return;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   if (!gameOver) {
-    /* SCORE BASED ON DISTANCE */
     score += speed;
 
-    /* INCREASE DIFFICULTY SLOWLY */
-    if (frame % 600 === 0) speed += 0.3;
-
-    /* PLAYER PHYSICS */
     player.velocity += player.gravity;
     player.y += player.velocity;
 
-    /* ROTATION ONLY IN AIR */
     if (!player.grounded) {
       player.rotation += 0.15;
     }
 
-    /* GROUND COLLISION */
     if (player.y + player.size >= groundY) {
       player.y = groundY - player.size;
       player.velocity = 0;
       player.grounded = true;
-
-      /* SNAP TO 90 DEGREE */
       player.rotation =
         Math.round(player.rotation / (Math.PI / 2)) * (Math.PI / 2);
     }
 
-    /* SPAWN SPIKES */
     if (frame % 120 === 0) addObstacle();
 
-    /* MOVE + COLLISION */
     obstacles.forEach(o => {
       o.x -= speed;
 
-      /* FAIR HITBOX */
       let padding = 6;
-
       if (
         player.x + padding < o.x + o.width &&
         player.x + player.size - padding > o.x &&
         player.y + player.size > groundY - o.height
       ) {
         gameOver = true;
-
-        if (score > highScore) {
-          highScore = score;
-          localStorage.setItem("gdHighScore", highScore);
-        }
       }
     });
   }
@@ -156,29 +216,11 @@ function update() {
   ctx.fillStyle = "#00ffff";
   ctx.fillRect(0, groundY, canvas.width, 5);
 
-  /* DRAW PLAYER WITH ROTATION */
+  /* DRAW PLAYER */
   ctx.save();
-  ctx.translate(player.x + player.size / 2, player.y + player.size / 2);
+  ctx.translate(player.x + 15, player.y + 15);
   ctx.rotate(player.rotation);
-
-  if (playerImg.complete && playerImg.naturalWidth > 0) {
-    ctx.drawImage(
-      playerImg,
-      -player.size / 2,
-      -player.size / 2,
-      player.size,
-      player.size
-    );
-  } else {
-    ctx.fillStyle = "#ffcc00";
-    ctx.fillRect(
-      -player.size / 2,
-      -player.size / 2,
-      player.size,
-      player.size
-    );
-  }
-
+  ctx.drawImage(playerImg, -15, -15, 30, 30);
   ctx.restore();
 
   /* DRAW SPIKES */
@@ -194,21 +236,21 @@ function update() {
 
   /* UI */
   ctx.fillStyle = "white";
-  ctx.font = "16px Arial";
   ctx.fillText("Score: " + Math.floor(score), 10, 20);
-  ctx.fillText("High: " + Math.floor(highScore), 10, 40);
 
   if (gameOver) {
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "white";
     ctx.font = "20px Arial";
     ctx.fillText("GAME OVER", 240, 90);
-    ctx.fillText("Tap / Space to Restart", 185, 120);
+    ctx.font = "14px Arial";
+    ctx.fillText("Tap / Space to Restart", 205, 120);
   }
 
   frame++;
   requestAnimationFrame(update);
 }
-
-update();
 </script>
 
 </body>
